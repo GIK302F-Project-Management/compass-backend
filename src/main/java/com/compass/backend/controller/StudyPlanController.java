@@ -21,7 +21,7 @@ public class StudyPlanController {
         this.generator = generator;
     }
 
-    @PostMapping
+    @PostMapping(produces = "application/json;charset=UTF-8")
     public StudyPlanResponse create(
         @Valid @RequestBody StudyPlanRequest request
     ) {
