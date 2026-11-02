@@ -13,8 +13,8 @@ public enum UserRepository {
     private final List<User> list = new ArrayList<>();
 
     private UserRepository() {
-        this.list.add(new User(1, "Ana", "ana@example.com", "ana123"));
-        this.list.add(new User(2, "Bruno", "bruno@example.com", "bruno123"));
+        this.list.add(new User(1, "Ana", "ana@alumni.mondragon.edu", "ana123"));
+        this.list.add(new User(2, "Bruno", "bruno@alumni.mondragon.edu", "bruno123"));
     }
 
     /**
