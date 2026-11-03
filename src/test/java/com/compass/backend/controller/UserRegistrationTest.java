@@ -30,6 +30,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.compass.backend.model.User;
 import com.compass.backend.model.UserRepository;
+import com.compass.backend.service.PasswordHasher;
+import com.compass.backend.service.UserService;
 
 /**
  * Registration tests (POST /user/register) without starting the server.
@@ -42,6 +44,9 @@ class UserRegistrationTest {
     @Autowired
     private UserRepository users;
 
+    @Autowired
+    private UserService userService;
+
     private static final String DOMAIN = "@alumni.mondragon.edu";
     private static final String VALID_PASSWORD = "secret-pass";
 
@@ -50,7 +55,8 @@ class UserRegistrationTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(users))
+        ensureAnaExists();
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService))
                 .setControllerAdvice(new UserExceptionHandler())
                 .build();
     }
@@ -59,6 +65,13 @@ class UserRegistrationTest {
     void removeCreatedUsers() {
         for (String email : createdEmails) {
             users.findByEmailIgnoreCase(email).ifPresent(users::delete);
+        }
+    }
+
+    /** The tests need one known account, so they create it instead of relying on seeded data. */
+    private void ensureAnaExists() {
+        if (!users.existsByEmailIgnoreCase("ana@alumni.mondragon.edu")) {
+            users.save(new User(0, "Ana", "ana@alumni.mondragon.edu", PasswordHasher.hash("ana123")));
         }
     }
 
