@@ -1,7 +1,5 @@
 package com.compass.backend.controller;
 
-import java.util.Map;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -13,8 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.compass.backend.dto.RegisterRequest;
 import com.compass.backend.dto.UserResponse;
 import com.compass.backend.model.User;
-import com.compass.backend.model.UserRepository;
-import com.compass.backend.service.PasswordHasher;
+import com.compass.backend.service.UserService;
 
 import jakarta.validation.Valid;
 
@@ -23,46 +20,33 @@ import jakarta.validation.Valid;
 @RequestMapping("/user")
 public class UserController {
 
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+
     /**
      * @brief This method creates a new account.
      * @param request JSON with name, email (university domain only) and password (8 to 72 characters).
-     * @return an HTTP response (created with the new user, without password, if everything is valid;
-     *         bad request with the invalid fields, handled by UserExceptionHandler;
-     *         conflict if the email is already registered)
+     * @return the new user, without password (201). Invalid fields (400) and an email that is
+     *         already registered (409) are turned into responses by UserExceptionHandler.
      */
     @PostMapping(value = "/register", consumes = "application/json")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
-
-        User user = UserRepository.instance.register(
-            request.name(), request.email(), PasswordHasher.hash(request.password()));
-
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("errors", Map.of("email", "An account with this email already exists.")));
-        }
-
+    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
+        User user = userService.register(request.name(), request.email(), request.password());
         return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
     }
 
     /**
      * @brief This method checks the email and password of a user.
      * @param credentials JSON with email and password.
-     * @return an HTTP response (OK with a welcome message if the credentials are valid,
-     *         not found if the email is not registered, unauthorized if the password is wrong)
+     * @return OK with a welcome message when the credentials are valid. An unknown email (404) and a
+     *         wrong password (401) are turned into responses by UserExceptionHandler.
      */
     @PostMapping(value = "/login", consumes = "application/json")
     public ResponseEntity<String> login(@RequestBody User credentials) {
-
-        User user = UserRepository.instance.findByEmail(credentials.getEmail());
-
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Sign Up first!");
-        }
-
-        if (!PasswordHasher.matches(credentials.getPassword(), user.getPassword())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Incorrect password!");
-        }
-
+        User user = userService.authenticate(credentials.getEmail(), credentials.getPassword());
         return ResponseEntity.ok("Welcome, " + user.getName() + "!");
     }
 

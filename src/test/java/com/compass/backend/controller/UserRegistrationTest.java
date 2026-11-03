@@ -21,6 +21,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -28,12 +30,22 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.compass.backend.model.User;
 import com.compass.backend.model.UserRepository;
+import com.compass.backend.service.PasswordHasher;
+import com.compass.backend.service.UserService;
 
 /**
  * Registration tests (POST /user/register) without starting the server.
- * UserRepository is a shared singleton, so every test registers unique emails and removes them afterwards.
+ * They run against a separate SQLite file (target/compass-test.db). Every test registers unique emails
+ * and removes them afterwards.
  */
+@SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:target/compass-test.db")
 class UserRegistrationTest {
+
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private UserService userService;
 
     private static final String DOMAIN = "@alumni.mondragon.edu";
     private static final String VALID_PASSWORD = "secret-pass";
@@ -43,7 +55,8 @@ class UserRegistrationTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController())
+        ensureAnaExists();
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService))
                 .setControllerAdvice(new UserExceptionHandler())
                 .build();
     }
@@ -51,10 +64,14 @@ class UserRegistrationTest {
     @AfterEach
     void removeCreatedUsers() {
         for (String email : createdEmails) {
-            User user = UserRepository.instance.findByEmail(email);
-            if (user != null) {
-                UserRepository.instance.deleteByPosition(UserRepository.instance.findPositionById(user.getId()));
-            }
+            users.findByEmailIgnoreCase(email).ifPresent(users::delete);
+        }
+    }
+
+    /** The tests need one known account, so they create it instead of relying on seeded data. */
+    private void ensureAnaExists() {
+        if (!users.existsByEmailIgnoreCase("ana@alumni.mondragon.edu")) {
+            users.save(new User(0, "Ana", "ana@alumni.mondragon.edu", PasswordHasher.hash("ana123")));
         }
     }
 
@@ -95,7 +112,7 @@ class UserRegistrationTest {
                 .andExpect(jsonPath("$.createdAt").exists())
                 .andExpect(jsonPath("$.password").doesNotExist());
 
-        assertNotNull(UserRepository.instance.findByEmail(email));
+        assertNotNull(users.findByEmailIgnoreCase(email).orElse(null));
     }
 
     @Test
@@ -115,14 +132,14 @@ class UserRegistrationTest {
         String email = uniqueEmail();
         register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isCreated());
 
-        String stored = UserRepository.instance.findByEmail(email).getPassword();
+        String stored = users.findByEmailIgnoreCase(email).orElse(null).getPassword();
         assertNotEquals(VALID_PASSWORD, stored);
         assertTrue(stored.startsWith("$2"), "expected a BCrypt hash but got: " + stored);
     }
 
     @Test
     void sampleUsersPasswordsAreAlsoHashed() {
-        User ana = UserRepository.instance.findByEmail("ana@alumni.mondragon.edu");
+        User ana = users.findByEmailIgnoreCase("ana@alumni.mondragon.edu").orElseThrow();
         assertNotEquals("ana123", ana.getPassword());
     }
 
@@ -133,8 +150,8 @@ class UserRegistrationTest {
         register(json("One", first, VALID_PASSWORD)).andExpect(status().isCreated());
         register(json("Two", second, VALID_PASSWORD)).andExpect(status().isCreated());
 
-        int firstId = UserRepository.instance.findByEmail(first).getId();
-        int secondId = UserRepository.instance.findByEmail(second).getId();
+        int firstId = users.findByEmailIgnoreCase(first).orElseThrow().getId();
+        int secondId = users.findByEmailIgnoreCase(second).orElseThrow().getId();
         assertNotEquals(firstId, secondId);
     }
 
@@ -175,7 +192,7 @@ class UserRegistrationTest {
                 .andExpect(jsonPath("$.errors.email").exists());
 
         // the original account is untouched
-        assertEquals("Carla", UserRepository.instance.findByEmail(email).getName());
+        assertEquals("Carla", users.findByEmailIgnoreCase(email).orElse(null).getName());
         login(email, VALID_PASSWORD).andExpect(status().isOk());
     }
 
@@ -203,7 +220,7 @@ class UserRegistrationTest {
         register(json(name, email, VALID_PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.name").value("Please enter your name."));
-        assertNull(UserRepository.instance.findByEmail(email));
+        assertNull(users.findByEmailIgnoreCase(email).orElse(null));
     }
 
     @Test
@@ -249,7 +266,7 @@ class UserRegistrationTest {
         register(json("Carla", email, VALID_PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.email").value(containsString(DOMAIN.substring(1))));
-        assertNull(UserRepository.instance.findByEmail(email));
+        assertNull(users.findByEmailIgnoreCase(email).orElse(null));
     }
 
     // ---------- validation: password ----------
@@ -261,7 +278,7 @@ class UserRegistrationTest {
         register(json("Carla", email, password))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.password").exists());
-        assertNull(UserRepository.instance.findByEmail(email));
+        assertNull(users.findByEmailIgnoreCase(email).orElse(null));
     }
 
     @Test
@@ -299,9 +316,9 @@ class UserRegistrationTest {
 
     @Test
     void invalidRequestNeverCreatesAUser() throws Exception {
-        int before = UserRepository.instance.getAll().size();
+        long before = users.count();
         register(json("", "carla@gmail.com", "123")).andExpect(status().isBadRequest());
-        assertEquals(before, UserRepository.instance.getAll().size());
+        assertEquals(before, users.count());
     }
 
     @Test

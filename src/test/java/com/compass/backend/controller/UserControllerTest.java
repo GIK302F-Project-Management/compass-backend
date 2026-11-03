@@ -6,20 +6,44 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.compass.backend.model.User;
+import com.compass.backend.model.UserRepository;
+import com.compass.backend.service.PasswordHasher;
+import com.compass.backend.service.UserService;
+
 /**
- * Login tests against the sample users in UserRepository, without starting the server.
+ * Login tests against a known account (Ana) that the test creates, without starting the server.
  */
+@SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:target/compass-test.db")
 class UserControllerTest {
+
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private UserService userService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController()).build();
+        ensureAnaExists();
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService))
+                .setControllerAdvice(new UserExceptionHandler())
+                .build();
+    }
+
+    /** The tests need one known account, so they create it instead of relying on seeded data. */
+    private void ensureAnaExists() {
+        if (!users.existsByEmailIgnoreCase("ana@alumni.mondragon.edu")) {
+            users.save(new User(0, "Ana", "ana@alumni.mondragon.edu", PasswordHasher.hash("ana123")));
+        }
     }
 
     private String credentials(String email, String password) {
