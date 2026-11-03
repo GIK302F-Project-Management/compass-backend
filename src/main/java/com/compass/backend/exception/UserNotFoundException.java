@@ -1,12 +1,12 @@
 package com.compass.backend.exception;
 
 /**
- * Thrown when no account exists for the given email.
+ * Thrown when a valid token points to an account that no longer exists.
  */
 public class UserNotFoundException extends RuntimeException {
 
     public UserNotFoundException() {
-        super("Sign Up first!");
+        super("This account no longer exists.");
     }
 
 }

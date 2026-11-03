@@ -2,6 +2,7 @@ package com.compass.backend.controller;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +16,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.compass.backend.model.User;
 import com.compass.backend.model.UserRepository;
 import com.compass.backend.service.PasswordHasher;
+import com.compass.backend.service.TokenService;
 import com.compass.backend.service.UserService;
 
 /**
@@ -29,12 +31,15 @@ class UserControllerTest {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private TokenService tokenService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         ensureAnaExists();
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService, tokenService))
                 .setControllerAdvice(new UserExceptionHandler())
                 .build();
     }
@@ -51,30 +56,49 @@ class UserControllerTest {
     }
 
     @Test
-    void loginSucceedsWithCorrectCredentials() throws Exception {
+    void loginReturnsTokenAndUserWithoutPassword() throws Exception {
         mockMvc.perform(post("/user/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(credentials("ana@alumni.mondragon.edu", "ana123")))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Welcome, Ana!"));
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.expiresAt").exists())
+                .andExpect(jsonPath("$.user.name").value("Ana"))
+                .andExpect(jsonPath("$.user.email").value("ana@alumni.mondragon.edu"))
+                .andExpect(jsonPath("$.user.password").doesNotExist());
     }
 
     @Test
-    void loginFailsWithWrongPassword() throws Exception {
+    void loginIgnoresEmailCaseAndSurroundingSpaces() throws Exception {
         mockMvc.perform(post("/user/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(credentials("  ANA@alumni.mondragon.edu ", "ana123")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void wrongPasswordAndUnknownEmailGiveTheSameAnswer() throws Exception {
+        String wrongPassword = mockMvc.perform(post("/user/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(credentials("ana@alumni.mondragon.edu", "wrong")))
                 .andExpect(status().isUnauthorized())
-                .andExpect(content().string("Incorrect password!"));
-    }
+                .andReturn().getResponse().getContentAsString();
 
-    @Test
-    void loginFailsWhenAccountDoesNotExist() throws Exception {
         mockMvc.perform(post("/user/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(credentials("nobody@alumni.mondragon.edu", "ana123")))
-                .andExpect(status().isNotFound())
-                .andExpect(content().string("Sign Up first!"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().string(wrongPassword));
+    }
+
+    @Test
+    void loginRequiresEmailAndPassword() throws Exception {
+        mockMvc.perform(post("/user/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\": \"\", \"password\": \"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.email").exists())
+                .andExpect(jsonPath("$.errors.password").exists());
     }
 
 }

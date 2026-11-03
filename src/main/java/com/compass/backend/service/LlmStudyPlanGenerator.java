@@ -140,7 +140,7 @@ public class LlmStudyPlanGenerator implements StudyPlanGenerator {
               "sessions": [
                 {
                   "goalId": "an input goal ID",
-                  "title": "a specific study activity in Portuguese",
+                  "title": "a specific study activity in English",
                   "date": "YYYY-MM-DD",
                   "durationMinutes": 30
                 }

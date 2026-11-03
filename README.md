@@ -95,6 +95,7 @@ Answer the questions and press **Enter** after each answer:
 
 | Question | How to answer |
 | --- | --- |
+| Email and password | An account you registered; the script signs in before asking for the plan |
 | Start date | Use `YYYY-MM-DD` |
 | Daily availability | Hours, for example `1.5` |
 | Goal title | For example, `Review genetics` |
@@ -107,3 +108,21 @@ The script converts hours to minutes for the API and displays the schedule in a 
 Check to see if **`Generator: llm`** appears. The status `ready` indicates that all minutes have been scheduled; `partial` indicates that some minutes remain unscheduled. Read the displayed warnings.
 
 To generate another plan, run the script command again. You do not need to restart the server or configure the key as long as it continues to run.
+
+## Authentication
+
+Only `POST /user/register` and `POST /user/login` are public. Every other endpoint needs an access token.
+
+1. `POST /user/login` with `{"email": "...", "password": "..."}` returns `{"token": "...", "expiresAt": "...", "user": {...}}`.
+2. Send the token on each request: `Authorization: Bearer <token>`.
+3. `GET /user/me` returns the logged-in user (useful to check a stored token is still valid).
+
+`POST /user/register` always answers `202` with the same message, whether the account was created or the email was already registered, so it cannot be used to find out who has an account. An existing account is never changed by a second registration.
+
+A missing, expired or invalid token gets `401`. A wrong password and an unknown email get the same `401` answer.
+
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `COMPASS_JWT_SECRET` | random at startup | Key that signs the tokens, at least 32 characters. Set it in every real environment; without it, a restart logs everyone out. |
+| `COMPASS_JWT_TTL` | `PT2H` | How long a token lasts (ISO-8601 duration). |
+| `COMPASS_CORS_ORIGINS` | `http://localhost:5173` | Web page addresses allowed to call the API from a browser, separated by commas. |

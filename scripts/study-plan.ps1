@@ -1,6 +1,6 @@
 function Read-StudyDate([string]$label) {
     while ($true) {
-        $text = Read-Host "$label (AAAA-MM-DD)"
+        $text = Read-Host "$label (YYYY-MM-DD)"
         $date = [datetime]::MinValue
 
         $valid = [datetime]::TryParseExact(
@@ -15,13 +15,13 @@ function Read-StudyDate([string]$label) {
             return $date
         }
 
-        Write-Host "Data inválida. Exemplo: 2026-11-05."
+        Write-Host "Invalid date. Example: 2026-11-05."
     }
 }
 
 function Read-StudyMinutes([string]$label, [int]$maximum) {
     while ($true) {
-        $text = (Read-Host "$label em horas (ex.: 1,5)").Replace(",", ".")
+        $text = (Read-Host "$label in hours (e.g. 1.5)").Replace(",", ".")
         $hours = [decimal]0
 
         $valid = [decimal]::TryParse(
@@ -39,31 +39,52 @@ function Read-StudyMinutes([string]$label, [int]$maximum) {
             }
         }
 
-        Write-Host "Informe uma duração positiva, em minutos inteiros, até $($maximum / 60) horas."
+        Write-Host "Enter a positive duration, in whole minutes, up to $($maximum / 60) hours."
     }
 }
 
-$start = Read-StudyDate "Data inicial"
+# The API only answers to a logged-in user: sign in first and send the token with the request.
+$apiUrl = "http://localhost:8080"
+$email = Read-Host "Email"
+$securePassword = Read-Host "Password" -AsSecureString
+$password = [System.Net.NetworkCredential]::new("", $securePassword).Password
 
-$dailyMinutes = Read-StudyMinutes "Disponibilidade por dia" 1440
+try {
+    $login = Invoke-RestMethod `
+        -Uri "$apiUrl/user/login" `
+        -Method Post `
+        -ContentType "application/json; charset=utf-8" `
+        -Body ([System.Text.Encoding]::UTF8.GetBytes((@{ email = $email; password = $password } | ConvertTo-Json))) `
+        -ErrorAction Stop
+} catch {
+    Write-Host "Could not sign in:"
+    Write-Host $_.Exception.Message
+    exit 1
+}
+
+Write-Host "Signed in as $($login.user.name)."
+
+$start = Read-StudyDate "Start date"
+
+$dailyMinutes = Read-StudyMinutes "Daily availability" 1440
 
 $goals = @()
 
 do {
     do {
-        $title = Read-Host "Título da meta"
+        $title = Read-Host "Goal title"
     } while ([string]::IsNullOrWhiteSpace($title) -or $title.Length -gt 200)
 
     do {
-        $deadline = Read-StudyDate "Prazo da meta"
+        $deadline = Read-StudyDate "Goal deadline"
         $days = ($deadline - $start).Days
 
         if ($days -lt 0 -or $days -gt 365) {
-            Write-Host "O prazo deve ficar entre a data inicial e 365 dias depois."
+            Write-Host "The deadline must be between the start date and 365 days after it."
         }
     } while ($days -lt 0 -or $days -gt 365)
 
-    $estimatedMinutes = Read-StudyMinutes "Tempo total necessário para essa meta" 10080
+    $estimatedMinutes = Read-StudyMinutes "Total time required for this goal" 10080
 
     $goals += @{
         id = "goal-$($goals.Count + 1)"
@@ -73,11 +94,11 @@ do {
     }
 
     $another = if ($goals.Count -lt 100) {
-        Read-Host "Adicionar outra meta? (s/n)"
+        Read-Host "Add another goal? (y/n)"
     } else {
         "n"
     }
-} while ($another -eq "s")
+} while ($another -eq "y")
 
 $body = @{
     startDate = $start.ToString("yyyy-MM-dd")
@@ -86,8 +107,9 @@ $body = @{
 } | ConvertTo-Json -Depth 6
 
 $params = @{
-    Uri = "http://localhost:8080/api/study-plans"
+    Uri = "$apiUrl/api/study-plans"
     Method = "Post"
+    Headers = @{ Authorization = "Bearer $($login.token)" }
     ContentType = "application/json; charset=utf-8"
     Body = [System.Text.Encoding]::UTF8.GetBytes($body)
     TimeoutSec = 120
@@ -95,29 +117,29 @@ $params = @{
 }
 
 try {
-    Write-Host "Gerando plano..."
+    Write-Host "Generating plan..."
 
     $plan = Invoke-RestMethod @params
 
-    Write-Host "Gerador:" $plan.source
+    Write-Host "Generator:" $plan.source
     Write-Host "Status:" $plan.status
 
     $plan.sessions |
         Sort-Object date |
         Select-Object `
-            @{Name="Data"; Expression={$_.date}},
-            @{Name="Meta"; Expression={$_.goalId}},
-            @{Name="Atividade"; Expression={$_.title}},
-            @{Name="Horas"; Expression={
+            @{Name="Date"; Expression={$_.date}},
+            @{Name="Goal"; Expression={$_.goalId}},
+            @{Name="Activity"; Expression={$_.title}},
+            @{Name="Hours"; Expression={
                 [math]::Round($_.durationMinutes / 60, 2)
             }} |
         Format-Table -AutoSize -Wrap
 
     foreach ($warning in $plan.warnings) {
-        Write-Host "Aviso:" $warning
+        Write-Host "Warning:" $warning
     }
 } catch {
-    Write-Host "Não foi possível gerar o plano:"
+    Write-Host "Could not generate the plan:"
     Write-Host $_.Exception.Message
 
     if ($_.ErrorDetails.Message) {
