@@ -2,6 +2,7 @@ package com.compass.backend.controller;
 
 import java.util.Map;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -23,6 +24,16 @@ import jakarta.validation.Valid;
 @RequestMapping("/user")
 public class UserController {
 
+    private static final ResponseEntity<Map<String, Map<String, String>>> EMAIL_TAKEN =
+        ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(Map.of("errors", Map.of("email", "An account with this email already exists.")));
+
+    private final UserRepository users;
+
+    public UserController(UserRepository users) {
+        this.users = users;
+    }
+
     /**
      * @brief This method creates a new account.
      * @param request JSON with name, email (university domain only) and password (8 to 72 characters).
@@ -33,15 +44,18 @@ public class UserController {
     @PostMapping(value = "/register", consumes = "application/json")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
 
-        User user = UserRepository.instance.register(
-            request.name(), request.email(), PasswordHasher.hash(request.password()));
-
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("errors", Map.of("email", "An account with this email already exists.")));
+        if (users.existsByEmailIgnoreCase(request.email())) {
+            return EMAIL_TAKEN;
         }
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+        try {
+            User user = users.save(
+                new User(0, request.name(), request.email(), PasswordHasher.hash(request.password())));
+            return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+        } catch (DataIntegrityViolationException e) {
+            // two simultaneous requests passed the check above; the unique column stopped the second one
+            return EMAIL_TAKEN;
+        }
     }
 
     /**
@@ -53,7 +67,7 @@ public class UserController {
     @PostMapping(value = "/login", consumes = "application/json")
     public ResponseEntity<String> login(@RequestBody User credentials) {
 
-        User user = UserRepository.instance.findByEmail(credentials.getEmail());
+        User user = users.findByEmailIgnoreCase(credentials.getEmail()).orElse(null);
 
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Sign Up first!");

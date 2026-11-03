@@ -6,20 +6,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.compass.backend.model.UserRepository;
+
 /**
- * Login tests against the sample users in UserRepository, without starting the server.
+ * Login tests against the sample users added by SampleUsersSeeder, without starting the server.
  */
+@SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:target/compass-test.db")
 class UserControllerTest {
+
+    @Autowired
+    private UserRepository users;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController()).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(users)).build();
     }
 
     private String credentials(String email, String password) {
