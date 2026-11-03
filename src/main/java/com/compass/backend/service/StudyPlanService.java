@@ -84,7 +84,7 @@ public class StudyPlanService implements StudyPlanGenerator {
         );
     }
 
-    private void validateRules(StudyPlanRequest request) {
+    public void validateRules(StudyPlanRequest request) {
         HashSet<String> ids = new HashSet<>();
 
         for (StudyGoalRequest goal : request.goals()) {
