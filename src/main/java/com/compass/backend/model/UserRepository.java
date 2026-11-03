@@ -3,6 +3,8 @@ package com.compass.backend.model;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.compass.backend.service.PasswordHasher;
+
 /**
  * In-memory repository. Data is lost on every restart; replace with a database
  * repository once the database is chosen.
@@ -13,8 +15,8 @@ public enum UserRepository {
     private final List<User> list = new ArrayList<>();
 
     private UserRepository() {
-        this.list.add(new User(1, "Ana", "ana@alumni.mondragon.edu", "ana123"));
-        this.list.add(new User(2, "Bruno", "bruno@alumni.mondragon.edu", "bruno123"));
+        this.list.add(new User(1, "Ana", "ana@alumni.mondragon.edu", PasswordHasher.hash("ana123")));
+        this.list.add(new User(2, "Bruno", "bruno@alumni.mondragon.edu", PasswordHasher.hash("bruno123")));
     }
 
     /**
@@ -31,6 +33,24 @@ public enum UserRepository {
      */
     public void add(User user) {
         this.list.add(user);
+    }
+
+    /**
+     * @brief This method registers a new user if the email is not taken yet. The check and the
+     *        insert happen together so two simultaneous requests cannot create the same email twice.
+     * @param name user name.
+     * @param email user email (already normalized).
+     * @param passwordHash BCrypt hash of the user password.
+     * @return the created user, or null when the email is already registered.
+     */
+    public synchronized User register(String name, String email, String passwordHash) {
+        if (findByEmail(email) != null)
+            return null;
+
+        int nextId = this.list.stream().mapToInt(User::getId).max().orElse(0) + 1;
+        User user = new User(nextId, name, email, passwordHash);
+        this.list.add(user);
+        return user;
     }
 
     /**
@@ -58,7 +78,7 @@ public enum UserRepository {
      */
     public User findByEmail(String email) {
         for (User user : this.list) {
-            if (user.getEmail().equals(email))
+            if (user.getEmail().equalsIgnoreCase(email))
                 return user;
         }
         return null;

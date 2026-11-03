@@ -1,0 +1,13 @@
+$kind: http-request
+description: ""
+url: http://localhost:8080/user/register
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "name": "Carla",
+        "email": "carla@alumni.mondragon.edu",
+        "password": "carla-secret"
+    }
+order: 1000
