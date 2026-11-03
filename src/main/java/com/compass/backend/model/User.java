@@ -1,5 +1,7 @@
 package com.compass.backend.model;
 
+import java.time.Instant;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -9,9 +11,12 @@ public class User {
     private String name;
     private String email;
 
-    // TODO: store a hash (e.g. BCrypt) instead of plain text before going to production
+    // On stored users this is a BCrypt hash. On a login request body it is the raw password.
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Instant createdAt = Instant.now();
 
     @JsonCreator // para aceitar sem o id
     public User() {
@@ -54,6 +59,14 @@ public class User {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
     }
 
 }

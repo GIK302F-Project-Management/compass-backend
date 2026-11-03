@@ -1,0 +1,13 @@
+$kind: http-request
+description: Expected 409 Conflict
+url: http://localhost:8080/user/register
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "name": "Ana",
+        "email": "ana@alumni.mondragon.edu",
+        "password": "ana-secret-1"
+    }
+order: 2000

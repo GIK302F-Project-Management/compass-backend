@@ -1,0 +1,13 @@
+$kind: http-request
+description: Expected 400 Bad Request with an error per invalid field
+url: http://localhost:8080/user/register
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "name": "",
+        "email": "carla@gmail.com",
+        "password": "123"
+    }
+order: 3000
