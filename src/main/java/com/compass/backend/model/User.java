@@ -36,7 +36,7 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    @JsonCreator // para aceitar sem o id
+    @JsonCreator // lets Jackson accept a body without the id
     public User() {
     }
 
