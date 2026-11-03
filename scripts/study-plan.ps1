@@ -43,6 +43,27 @@ function Read-StudyMinutes([string]$label, [int]$maximum) {
     }
 }
 
+# The API only answers to a logged-in user: sign in first and send the token with the request.
+$apiUrl = "http://localhost:8080"
+$email = Read-Host "Email"
+$securePassword = Read-Host "Password" -AsSecureString
+$password = [System.Net.NetworkCredential]::new("", $securePassword).Password
+
+try {
+    $login = Invoke-RestMethod `
+        -Uri "$apiUrl/user/login" `
+        -Method Post `
+        -ContentType "application/json; charset=utf-8" `
+        -Body ([System.Text.Encoding]::UTF8.GetBytes((@{ email = $email; password = $password } | ConvertTo-Json))) `
+        -ErrorAction Stop
+} catch {
+    Write-Host "Could not sign in:"
+    Write-Host $_.Exception.Message
+    exit 1
+}
+
+Write-Host "Signed in as $($login.user.name)."
+
 $start = Read-StudyDate "Start date"
 
 $dailyMinutes = Read-StudyMinutes "Daily availability" 1440
@@ -86,8 +107,9 @@ $body = @{
 } | ConvertTo-Json -Depth 6
 
 $params = @{
-    Uri = "http://localhost:8080/api/study-plans"
+    Uri = "$apiUrl/api/study-plans"
     Method = "Post"
+    Headers = @{ Authorization = "Bearer $($login.token)" }
     ContentType = "application/json; charset=utf-8"
     Body = [System.Text.Encoding]::UTF8.GetBytes($body)
     TimeoutSec = 120

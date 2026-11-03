@@ -4,8 +4,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.compass.backend.exception.EmailAlreadyRegisteredException;
+import com.compass.backend.exception.InvalidCredentialsException;
 import com.compass.backend.exception.UserNotFoundException;
-import com.compass.backend.exception.WrongPasswordException;
 import com.compass.backend.model.User;
 import com.compass.backend.model.UserRepository;
 
@@ -15,6 +15,8 @@ import com.compass.backend.model.UserRepository;
  */
 @Service
 public class UserService {
+
+    private static final String UNKNOWN_USER_HASH = PasswordHasher.hash("no-such-user");
 
     private final UserRepository users;
 
@@ -48,17 +50,32 @@ public class UserService {
      * @param email user email.
      * @param rawPassword password typed by the user.
      * @return the user when the credentials are valid.
-     * @throws UserNotFoundException when the email is not registered.
-     * @throws WrongPasswordException when the password does not match.
+     * @throws InvalidCredentialsException when the email is unknown or the password does not match.
      */
     public User authenticate(String email, String rawPassword) {
-        User user = users.findByEmailIgnoreCase(email).orElseThrow(UserNotFoundException::new);
+        User user = users.findByEmailIgnoreCase(email).orElse(null);
+
+        if (user == null) {
+            // spend the same time as a real check, so response time does not reveal which emails exist
+            PasswordHasher.matches(rawPassword, UNKNOWN_USER_HASH);
+            throw new InvalidCredentialsException();
+        }
 
         if (!PasswordHasher.matches(rawPassword, user.getPassword())) {
-            throw new WrongPasswordException();
+            throw new InvalidCredentialsException();
         }
 
         return user;
+    }
+
+    /**
+     * @brief This method finds the account a token was issued to.
+     * @param id user id.
+     * @return the user.
+     * @throws UserNotFoundException when the account no longer exists.
+     */
+    public User findById(int id) {
+        return users.findById(id).orElseThrow(UserNotFoundException::new);
     }
 
 }

@@ -31,6 +31,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.compass.backend.model.User;
 import com.compass.backend.model.UserRepository;
 import com.compass.backend.service.PasswordHasher;
+import com.compass.backend.service.TokenService;
 import com.compass.backend.service.UserService;
 
 /**
@@ -47,6 +48,9 @@ class UserRegistrationTest {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private TokenService tokenService;
+
     private static final String DOMAIN = "@alumni.mondragon.edu";
     private static final String VALID_PASSWORD = "secret-pass";
 
@@ -56,7 +60,7 @@ class UserRegistrationTest {
     @BeforeEach
     void setUp() {
         ensureAnaExists();
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService, tokenService))
                 .setControllerAdvice(new UserExceptionHandler())
                 .build();
     }
@@ -122,7 +126,8 @@ class UserRegistrationTest {
 
         login(email, VALID_PASSWORD)
                 .andExpect(status().isOk())
-                .andExpect(content().string("Welcome, Carla!"));
+                .andExpect(jsonPath("$.user.name").value("Carla"))
+                .andExpect(jsonPath("$.token").isNotEmpty());
         login(email, "wrong-password")
                 .andExpect(status().isUnauthorized());
     }
