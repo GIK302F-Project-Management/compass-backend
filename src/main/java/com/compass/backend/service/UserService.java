@@ -3,7 +3,6 @@ package com.compass.backend.service;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import com.compass.backend.exception.EmailAlreadyRegisteredException;
 import com.compass.backend.exception.InvalidCredentialsException;
 import com.compass.backend.exception.UserNotFoundException;
 import com.compass.backend.model.User;
@@ -26,22 +25,24 @@ public class UserService {
 
     /**
      * @brief This method creates a new account, storing only the BCrypt hash of the password.
+     *        When the email already has an account nothing is changed and nothing is reported, so the
+     *        caller cannot use registration to find out which emails are registered.
      * @param name user name.
      * @param email user email (already normalized).
      * @param rawPassword password typed by the user.
-     * @return the stored user.
-     * @throws EmailAlreadyRegisteredException when the email is already in use.
      */
-    public User register(String name, String email, String rawPassword) {
+    public void register(String name, String email, String rawPassword) {
+        // hash first: a taken email must cost the same time as a free one
+        String hash = PasswordHasher.hash(rawPassword);
+
         if (users.existsByEmailIgnoreCase(email)) {
-            throw new EmailAlreadyRegisteredException();
+            return;
         }
 
         try {
-            return users.save(new User(0, name, email, PasswordHasher.hash(rawPassword)));
+            users.save(new User(0, name, email, hash));
         } catch (DataIntegrityViolationException e) {
             // two simultaneous requests passed the check above; the unique column stopped the second one
-            throw new EmailAlreadyRegisteredException(e);
         }
     }
 

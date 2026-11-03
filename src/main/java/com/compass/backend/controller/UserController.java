@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.compass.backend.dto.LoginRequest;
 import com.compass.backend.dto.LoginResponse;
 import com.compass.backend.dto.RegisterRequest;
+import com.compass.backend.dto.RegisterResponse;
 import com.compass.backend.dto.UserResponse;
 import com.compass.backend.model.User;
 import com.compass.backend.service.AccessToken;
@@ -36,13 +37,14 @@ public class UserController {
     /**
      * @brief This method creates a new account.
      * @param request JSON with name, email (university domain only) and password (8 to 72 characters).
-     * @return the new user, without password (201). Invalid fields (400) and an email that is
-     *         already registered (409) are turned into responses by UserExceptionHandler.
+     * @return 202 with a fixed message, also when the email already has an account, so registration
+     *         cannot be used to find out which emails are registered. Invalid fields (400) are turned
+     *         into responses by UserExceptionHandler.
      */
     @PostMapping(value = "/register", consumes = "application/json")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
-        User user = userService.register(request.name(), request.email(), request.password());
-        return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+    public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
+        userService.register(request.name(), request.email(), request.password());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(RegisterResponse.received());
     }
 
     /**

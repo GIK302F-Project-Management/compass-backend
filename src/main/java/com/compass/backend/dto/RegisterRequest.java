@@ -41,4 +41,10 @@ public record RegisterRequest(
         email = email == null ? null : email.trim().toLowerCase();
     }
 
+    /** The password is hidden so it never ends up in a log line. */
+    @Override
+    public String toString() {
+        return "RegisterRequest[name=" + name + ", email=" + email + ", password=***]";
+    }
+
 }

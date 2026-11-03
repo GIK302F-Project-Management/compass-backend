@@ -117,6 +117,8 @@ Only `POST /user/register` and `POST /user/login` are public. Every other endpoi
 2. Send the token on each request: `Authorization: Bearer <token>`.
 3. `GET /user/me` returns the logged-in user (useful to check a stored token is still valid).
 
+`POST /user/register` always answers `202` with the same message, whether the account was created or the email was already registered, so it cannot be used to find out who has an account. An existing account is never changed by a second registration.
+
 A missing, expired or invalid token gets `401`. A wrong password and an unknown email get the same `401` answer.
 
 | Environment variable | Default | Meaning |

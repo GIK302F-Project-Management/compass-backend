@@ -105,15 +105,14 @@ class UserRegistrationTest {
     // ---------- success ----------
 
     @Test
-    void registerCreatesUserAndReturnsItWithoutPassword() throws Exception {
+    void registerCreatesTheUserAndReturnsNoAccountData() throws Exception {
         String email = uniqueEmail();
 
         register(json("Carla", email, VALID_PASSWORD))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.name").value("Carla"))
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.createdAt").exists())
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.id").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist())
                 .andExpect(jsonPath("$.password").doesNotExist());
 
         assertNotNull(users.findByEmailIgnoreCase(email).orElse(null));
@@ -122,7 +121,7 @@ class UserRegistrationTest {
     @Test
     void registeredUserCanLogIn() throws Exception {
         String email = uniqueEmail();
-        register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isCreated());
+        register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isAccepted());
 
         login(email, VALID_PASSWORD)
                 .andExpect(status().isOk())
@@ -135,7 +134,7 @@ class UserRegistrationTest {
     @Test
     void passwordIsStoredAsBcryptHash() throws Exception {
         String email = uniqueEmail();
-        register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isCreated());
+        register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isAccepted());
 
         String stored = users.findByEmailIgnoreCase(email).orElse(null).getPassword();
         assertNotEquals(VALID_PASSWORD, stored);
@@ -152,8 +151,8 @@ class UserRegistrationTest {
     void eachNewUserGetsADifferentId() throws Exception {
         String first = uniqueEmail();
         String second = uniqueEmail();
-        register(json("One", first, VALID_PASSWORD)).andExpect(status().isCreated());
-        register(json("Two", second, VALID_PASSWORD)).andExpect(status().isCreated());
+        register(json("One", first, VALID_PASSWORD)).andExpect(status().isAccepted());
+        register(json("Two", second, VALID_PASSWORD)).andExpect(status().isAccepted());
 
         int firstId = users.findByEmailIgnoreCase(first).orElseThrow().getId();
         int secondId = users.findByEmailIgnoreCase(second).orElseThrow().getId();
@@ -165,15 +164,17 @@ class UserRegistrationTest {
         String email = uniqueEmail();
 
         register(json("  Carla  ", "  " + email.toUpperCase().replace("ALUMNI.MONDRAGON.EDU", "Alumni.Mondragon.edu") + " ", VALID_PASSWORD))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.name").value("Carla"))
-                .andExpect(jsonPath("$.email").value(email));
+                .andExpect(status().isAccepted());
+
+        User stored = users.findByEmailIgnoreCase(email).orElseThrow();
+        assertEquals("Carla", stored.getName());
+        assertEquals(email, stored.getEmail());
     }
 
     @Test
     void passwordWithSpacesIsAcceptedAsIs() throws Exception {
         String email = uniqueEmail();
-        register(json("Carla", email, "  spaced pass  ")).andExpect(status().isCreated());
+        register(json("Carla", email, "  spaced pass  ")).andExpect(status().isAccepted());
 
         login(email, "  spaced pass  ").andExpect(status().isOk());
         login(email, "spaced pass").andExpect(status().isUnauthorized());
@@ -181,39 +182,56 @@ class UserRegistrationTest {
 
     @Test
     void passwordOfExactlyEightAndSeventyTwoCharactersIsAccepted() throws Exception {
-        register(json("Min", uniqueEmail(), "a".repeat(8))).andExpect(status().isCreated());
-        register(json("Max", uniqueEmail(), "a".repeat(72))).andExpect(status().isCreated());
+        register(json("Min", uniqueEmail(), "a".repeat(8))).andExpect(status().isAccepted());
+        register(json("Max", uniqueEmail(), "a".repeat(72))).andExpect(status().isAccepted());
     }
 
     // ---------- duplicates ----------
 
     @Test
-    void registeringTheSameEmailTwiceReturnsConflict() throws Exception {
+    void registeringATakenEmailLooksExactlyLikeASuccessAndChangesNothing() throws Exception {
         String email = uniqueEmail();
-        register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isCreated());
+        String firstAnswer = register(json("Carla", email, VALID_PASSWORD))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
 
-        register(json("Other Carla", email, "another-pass"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.errors.email").exists());
+        String secondAnswer = register(json("Other Carla", email, "another-pass"))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
 
-        // the original account is untouched
+        assertEquals(firstAnswer, secondAnswer);
+
+        // the original account is untouched: same name, and the old password still works, the new one does not
         assertEquals("Carla", users.findByEmailIgnoreCase(email).orElse(null).getName());
         login(email, VALID_PASSWORD).andExpect(status().isOk());
+        login(email, "another-pass").andExpect(status().isUnauthorized());
     }
 
     @Test
     void duplicateEmailIsDetectedRegardlessOfCase() throws Exception {
         String email = uniqueEmail();
-        register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isCreated());
+        register(json("Carla", email, VALID_PASSWORD)).andExpect(status().isAccepted());
 
-        register(json("Carla", email.toUpperCase().replace("ALUMNI.MONDRAGON.EDU", "alumni.mondragon.edu"), VALID_PASSWORD))
-                .andExpect(status().isConflict());
+        register(json("Impostor", email.toUpperCase().replace("ALUMNI.MONDRAGON.EDU", "alumni.mondragon.edu"), "another-pass"))
+                .andExpect(status().isAccepted());
+
+        assertEquals("Carla", users.findByEmailIgnoreCase(email).orElseThrow().getName());
     }
 
     @Test
-    void sampleUserEmailCannotBeRegisteredAgain() throws Exception {
-        register(json("Fake Ana", "ana@alumni.mondragon.edu", VALID_PASSWORD))
-                .andExpect(status().isConflict());
+    void sampleUserEmailCannotBeTakenOver() throws Exception {
+        register(json("Fake Ana", "ana@alumni.mondragon.edu", "another-pass"))
+                .andExpect(status().isAccepted());
+
+        assertEquals("Ana", users.findByEmailIgnoreCase("ana@alumni.mondragon.edu").orElseThrow().getName());
+        login("ana@alumni.mondragon.edu", "another-pass").andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void requestToStringHidesThePassword() {
+        String text = new com.compass.backend.dto.RegisterRequest("Carla", "c@alumni.mondragon.edu", "plain-text-pw").toString();
+
+        assertTrue(!text.contains("plain-text-pw"), text);
     }
 
     // ---------- validation: name ----------

@@ -9,7 +9,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.compass.backend.exception.EmailAlreadyRegisteredException;
 import com.compass.backend.exception.InvalidCredentialsException;
 import com.compass.backend.exception.UserNotFoundException;
 
@@ -28,12 +27,6 @@ public class UserExceptionHandler {
         ex.getBindingResult().getFieldErrors()
             .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("errors", errors));
-    }
-
-    @ExceptionHandler(EmailAlreadyRegisteredException.class)
-    public ResponseEntity<Map<String, Map<String, String>>> handleEmailTaken(EmailAlreadyRegisteredException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-            .body(Map.of("errors", Map.of("email", ex.getMessage())));
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)
