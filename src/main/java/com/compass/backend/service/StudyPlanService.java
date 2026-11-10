@@ -43,6 +43,11 @@ public class StudyPlanService implements StudyPlanGenerator {
             LocalDate date = request.startDate();
 
             while (remaining > 0 && !date.isAfter(goal.deadline())) {
+                if (request.isRestDay(date)) {
+                    date = date.plusDays(1);
+                    continue;
+                }
+
                 int used = usedMinutes.getOrDefault(date, 0);
 
                 int available =

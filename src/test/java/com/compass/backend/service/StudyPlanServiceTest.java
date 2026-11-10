@@ -92,6 +92,27 @@ class StudyPlanServiceTest {
     }
 
     @Test
+    void skipsRestDays() {
+        LocalDate saturday = LocalDate.of(2026, 11, 14);
+
+        var request = new StudyPlanRequest(
+            saturday,
+            60,
+            List.of(new StudyGoalRequest("goal-1", "Genetics", saturday.plusDays(2), 120)),
+            null,
+            java.util.Set.of(java.time.DayOfWeek.SUNDAY)
+        );
+
+        var result = service.generate(request);
+
+        assertEquals("ready", result.status());
+        assertEquals(
+            List.of(saturday, saturday.plusDays(2)),
+            result.sessions().stream().map(StudySession::date).toList()
+        );
+    }
+
+    @Test
     void rejectsDeadlineBeforeStartDate() {
         LocalDate start = LocalDate.of(2026, 11, 2);
 
