@@ -15,7 +15,7 @@
 	<name>Compass Backend</name>
 	<description>Backend API for Compass, a website that helps students with their studies</description>
 	<properties>
-		<java.version>25</java.version>
+		<java.version>21</java.version>
 		<sqlite-jdbc.version>3.50.3.0</sqlite-jdbc.version>
 	</properties>
 	<dependencies>
