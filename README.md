@@ -1,45 +1,156 @@
-# compass
+# compass-backend
 
-Web interface for Compass, an AI study companion that helps students plan their studies, manage learning goals, and track progress.
-
-The backend API lives in [compass-backend](https://github.com/GIK302F-Project-Management/compass-backend).
+REST API for Compass, an AI study companion that helps students plan their studies, manage learning goals and track progress.
+The web page that uses it lives in [compass](https://github.com/GIK302F-Project-Management/compass).
 
 ## Tech stack
 
-- React 19 + TypeScript
-- Vite
-- React Router
+- Java 21 or newer, Spring Boot 4 (Web, Validation, Security with JWT, Data JPA)
+- SQLite file database (no server to install)
+- Maven (use the included `./mvnw`)
+- Optional: an API key for an OpenAI-compatible provider (OpenRouter by default), to let a language model write the study plans
 
 ## Getting started
 
-Requirements: Node.js 20+ and npm.
-
 ```bash
-npm install
-npm run dev
+./mvnw spring-boot:run     # http://localhost:8080
+./mvnw test                # runs the whole test suite
 ```
 
-The app runs at http://localhost:5173.
+On Windows use `.\mvnw.cmd` instead of `./mvnw`.
 
-## Scripts
+The database is created on first start in `compass.db`, next to where you start the app. Set `COMPASS_DB_PATH` to use another file.
 
-| Command           | Description                         |
-| ----------------- | ----------------------------------- |
-| `npm run dev`     | Start the development server        |
-| `npm run build`   | Type-check and build for production |
-| `npm run lint`    | Run ESLint                          |
-| `npm run preview` | Preview the production build        |
+## Configuration
+
+Everything is optional for local development. Set these as environment variables.
+
+| Variable                | Default                 | Meaning                                                                                                                                       |
+| ----------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COMPASS_DB_PATH`       | `compass.db`            | SQLite file.                                                                                                                                  |
+| `COMPASS_JWT_SECRET`    | random at startup       | Key that signs the access tokens, at least 32 characters. Set it in every real environment; without it, every restart logs everyone out.      |
+| `COMPASS_JWT_TTL`       | `PT2H`                  | How long a token lasts (ISO-8601 duration).                                                                                                   |
+| `COMPASS_CORS_ORIGINS`  | `http://localhost:5173` | Web page addresses allowed to call the API from a browser, separated by commas.                                                               |
+| `LLM_ENABLED`           | `false`                 | `true` makes study plans come from a language model instead of the built-in rules.                                                            |
+| `LLM_API_KEY`           | none                    | Key of the AI provider. Required when `LLM_ENABLED` is `true`. `OPENROUTER_API_KEY` works too. Never put it in the code or on GitHub.         |
+| `LLM_MODEL`             | none                    | Model to use, for example `openrouter/free`. Required when `LLM_ENABLED` is `true`. `OPENROUTER_MODEL` works too.                              |
+| `LLM_BASE_URL`          | OpenRouter              | Address of any OpenAI-compatible API, for example `https://api.openai.com/v1` to use OpenAI.                                                  |
+
+## API
+
+Only `POST /user/register` and `POST /user/login` are public. Every other endpoint needs an access token. A missing, expired or
+invalid token gets `401`.
+
+### Accounts and login
+
+| Request              | Body                                   | Answer                                                                    |
+| -------------------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| `POST /user/register` | `{"name", "email", "password"}`       | `202` with a fixed message, whether or not the email was already taken    |
+| `POST /user/login`    | `{"email", "password"}`               | `200` with `{"token", "expiresAt", "user"}`                               |
+| `GET /user/me`        | none                                  | `200` with the logged-in user (use it to check a stored token still works) |
+
+Send the token on every other request: `Authorization: Bearer <token>`.
+
+- The email must belong to the university (`@alumni.mondragon.edu`) and the password has 8 to 72 characters. Invalid fields get `400`.
+- Registering always answers `202` with the same message, so it cannot be used to find out who has an account. A second registration
+  never changes an existing account.
+- A wrong password and an unknown email get the same `401` answer, for the same reason.
+
+### Learning goals
+
+A student manages their own goals. Each request only sees and changes the goals of the student the token belongs to.
+
+| Request              | Body                                     | Answer                                       |
+| -------------------- | ---------------------------------------- | -------------------------------------------- |
+| `GET /goals`         | none                                     | `200` with the student's goals, oldest first |
+| `POST /goals`        | `{"title": "...", "description": "..."}` | `201` with the created goal                  |
+| `PUT /goals/{id}`    | `{"title": "...", "description": "..."}` | `200` with the updated goal                  |
+| `DELETE /goals/{id}` | none                                     | `204`                                        |
+
+A goal is `{"id": 1, "title": "...", "description": "...", "createdAt": "..."}`. The title is required (at most 100 characters);
+the description is optional (at most 1000 characters). Invalid fields get `400` with `{"errors": {"title": "..."}}`.
+
+Another student's goal and a goal that does not exist both answer `404`, so goal ids cannot be used to see what other students wrote.
+
+### Study plans
+
+`POST /api/study-plans` turns goals and the time a student has into a day-by-day schedule. It does not store anything.
+
+```json
+{
+  "startDate": "2026-11-10",
+  "dailyAvailableMinutes": 90,
+  "goals": [{ "id": "g1", "title": "Review genetics", "deadline": "2026-11-20", "estimatedMinutes": 180 }],
+  "restDays": ["SUNDAY"],
+  "preferences": "Split big tasks across several days"
+}
+```
+
+`restDays` (days of the week with no study, at most 6) and `preferences` (free text, at most 500 characters) are optional.
+Both planners always keep the rest days; only the AI planner reads the preferences, and only as a soft wish.
+
+The answer is `{"source", "status", "sessions", "warnings"}`:
+
+- `source` is `rule-based` (built-in rules, the default) or `llm` (written by the language model).
+- `status` is `ready` when every minute was scheduled and `partial` when some did not fit before their deadline; `warnings` says which.
+- `sessions` lists `{"goalId", "title", "date", "durationMinutes"}`, sorted by date.
+
+## Study plans written by the AI
+
+By default plans come from the built-in rules and need no setup. To let a language model write them, start the server with the
+`LLM_*` settings from the table above. They use OpenRouter by default; set `LLM_BASE_URL` (and a matching key and model) to use another
+OpenAI-compatible provider.
+
+macOS / Linux:
+
+```bash
+read -rs LLM_API_KEY && export LLM_API_KEY   # paste the key, then press Enter (it is not shown)
+export LLM_MODEL=openrouter/free
+export LLM_ENABLED=true
+./mvnw spring-boot:run
+```
+
+Windows PowerShell:
+
+```powershell
+$credential = Get-Credential -UserName "OpenRouter" -Message "Paste the API key into the password field"
+$env:LLM_API_KEY = $credential.GetNetworkCredential().Password.Trim()
+Remove-Variable credential
+$env:LLM_MODEL = "openrouter/free"
+$env:LLM_ENABLED = "true"
+.\mvnw.cmd spring-boot:run
+```
+
+Wait for `Started CompassBackendApplication` and leave that terminal open. Repeat the setup in every new terminal window.
+If the key, the model or the address is missing or invalid the server refuses to start. If the model answers with an invalid or incomplete plan, the
+request fails with `502` instead of returning a wrong plan.
+
+### Trying it from the terminal (Windows)
+
+With the server running, open another PowerShell window in this folder and run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\study-plan.ps1
+```
+
+The script asks for the email and password of an account you registered, then for the start date (`YYYY-MM-DD`), the hours available
+per day and each goal (title, deadline, hours needed). It prints the schedule as a table and the warnings. Check that `Generator: llm`
+appears when you expect the model to be used. To get another plan, run the script again; the server does not need a restart.
 
 ## Project structure
 
 ```
-src/
-├── api/          # API clients (auth, activities, tasks, session)
-├── components/   # Reusable UI components
-├── mocks/        # Mock data used until the backend is connected
-├── pages/        # Route pages
-├── utils/        # Helpers
-└── validation/   # Form validation
+src/main/java/com/compass/backend/
+├── config/       # Security (JWT, CORS) and token setup
+├── controller/   # HTTP endpoints and the error handlers that turn exceptions into responses
+├── dto/          # Request and response shapes
+├── exception/    # Business errors (invalid credentials, goal not found...)
+├── model/        # JPA entities and repositories
+├── service/      # Business logic: users, tokens, goals, study-plan generators
+└── validation/   # Custom validation rules
+src/test/java/    # Controller tests (MockMvc) and service tests
+scripts/          # study-plan.ps1, the terminal client for study plans
+postman/          # Postman collections for register and login
 ```
 
 ## Workflow
@@ -47,82 +158,3 @@ src/
 - Create a branch per user story: `feature/US-<n>-short-description`
 - Open a Pull Request to `main` and get at least one review before merging
 - Commit messages: `US-<n>: short description`
-
-
-
-
-
-# Compass Backend — How to Use It
-
-
-## 1. Enable the AI and start the server
-
-Run this command:
-```powershell
-$credential = Get-Credential -UserName "OpenRouter" -Message "Paste the API key into the password field"
-```
-
-Just paste the key into the **password** field and confirm. Then, run:
-
-```powershell
-$env:OPENROUTER_API_KEY = $credential.GetNetworkCredential().Password.Trim()
-Remove-Variable credential
-
-$env:OPENROUTER_MODEL = "openrouter/free"
-$env:LLM_ENABLED = "true"
-
-.\mvnw.cmd spring-boot:run
-```
-
-
-Wait for the message `Started CompassBackendApplication`.
-
-**Leave this terminal window open.** The AI will be called automatically when you request a plan.
-
-Do not include your key in your code or on GitHub. Repeat the setup when starting from a new terminal window.
-
-## 2. Enter the data and generate the plan
-
-Open **another PowerShell window**, also in the `compass-backend` folder, and run:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\study-plan.ps1
-```
-
-This command uses the form saved in `scripts/study-plan.ps1`. The file must be included in the project; if it does not exist, add the interactive plan-generation script to it.
-
-Answer the questions and press **Enter** after each answer:
-
-| Question | How to answer |
-| --- | --- |
-| Email and password | An account you registered; the script signs in before asking for the plan |
-| Start date | Use `YYYY-MM-DD` |
-| Daily availability | Hours, for example `1.5` |
-| Goal title | For example, `Review genetics` |
-| Goal deadline | Use `YYYY-MM-DD`, on or after the start date |
-| Total time required | Hours to complete this goal, for example `3` |
-| Add another goal? | `y` to add or `n` to generate |
-
-The script converts hours to minutes for the API and displays the schedule in a table, showing the date, activity, and hours.
-
-Check to see if **`Generator: llm`** appears. The status `ready` indicates that all minutes have been scheduled; `partial` indicates that some minutes remain unscheduled. Read the displayed warnings.
-
-To generate another plan, run the script command again. You do not need to restart the server or configure the key as long as it continues to run.
-
-## Authentication
-
-Only `POST /user/register` and `POST /user/login` are public. Every other endpoint needs an access token.
-
-1. `POST /user/login` with `{"email": "...", "password": "..."}` returns `{"token": "...", "expiresAt": "...", "user": {...}}`.
-2. Send the token on each request: `Authorization: Bearer <token>`.
-3. `GET /user/me` returns the logged-in user (useful to check a stored token is still valid).
-
-`POST /user/register` always answers `202` with the same message, whether the account was created or the email was already registered, so it cannot be used to find out who has an account. An existing account is never changed by a second registration.
-
-A missing, expired or invalid token gets `401`. A wrong password and an unknown email get the same `401` answer.
-
-| Environment variable | Default | Meaning |
-| --- | --- | --- |
-| `COMPASS_JWT_SECRET` | random at startup | Key that signs the tokens, at least 32 characters. Set it in every real environment; without it, a restart logs everyone out. |
-| `COMPASS_JWT_TTL` | `PT2H` | How long a token lasts (ISO-8601 duration). |
-| `COMPASS_CORS_ORIGINS` | `http://localhost:5173` | Web page addresses allowed to call the API from a browser, separated by commas. |
