@@ -1,95 +1,60 @@
 package com.compass.backend.service;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
-import com.compass.backend.model.Activity;
-import com.compass.backend.model.ActivityRepository;
-import com.compass.backend.model.PlanMember;
-import com.compass.backend.model.PlanMemberRepository;
 import com.compass.backend.model.Task;
 import com.compass.backend.model.TaskRepository;
-import com.compass.backend.model.User;
-import com.compass.backend.model.UserRepository;
+import com.compass.backend.service.SharingService.MemberView;
 
 /**
- * The overall progress of a plan, and what each member has completed. Computed on every request from
- * the activities and tasks, so a change made by one member shows up for all the others on their next refresh.
+ * How far an activity has got, and how its tasks are shared out between the members. Computed on every
+ * request from the tasks, so a change made by one member shows up for the others on their next refresh.
  */
 @Service
 public class ProgressService {
 
-    /** What one member completed. */
-    public record MemberProgress(int userId, String name, int tasksDone, int activitiesDone) {
+    /** The tasks one member took, and how many of those are done. */
+    public record MemberProgress(int userId, String name, int tasksAssigned, int tasksDone) {
     }
 
-    /**
-     * Overall progress. The percentage counts every task, plus every activity that has no tasks,
-     * as one step each, so a big activity weighs more than a small one.
-     */
-    public record PlanProgress(int activitiesTotal, int activitiesDone, int tasksTotal, int tasksDone, int percent,
+    /** Overall progress: done tasks out of all tasks, plus the tasks nobody took yet. */
+    public record ActivityProgress(int tasksTotal, int tasksDone, int tasksUnassigned, int percent,
             List<MemberProgress> members) {
     }
 
-    private final ActivityRepository activities;
     private final TaskRepository tasks;
-    private final PlanMemberRepository members;
-    private final UserRepository users;
-    private final PlanAccess access;
+    private final SharingService sharing;
 
-    public ProgressService(ActivityRepository activities, TaskRepository tasks, PlanMemberRepository members,
-            UserRepository users, PlanAccess access) {
-        this.activities = activities;
+    public ProgressService(TaskRepository tasks, SharingService sharing) {
         this.tasks = tasks;
-        this.members = members;
-        this.users = users;
-        this.access = access;
+        this.sharing = sharing;
     }
 
     /**
-     * @brief This method computes the progress of a plan.
+     * @brief This method computes the progress of an activity.
      * @param userId the logged-in student.
-     * @param planId plan id.
+     * @param activityId activity id.
      * @return the totals, the percentage and one line per current member.
-     * @throws com.compass.backend.exception.PlanNotFoundException when the student is not a member.
+     * @throws com.compass.backend.exception.ActivityNotFoundException when the student is not a member.
      */
-    public PlanProgress of(int userId, int planId) {
-        access.requireMember(userId, planId);
-        List<Activity> planActivities = activities.findByPlanIdOrderByIdAsc(planId);
-        List<Task> planTasks = tasks.findByPlanIdOrderByIdAsc(planId);
+    public ActivityProgress of(int userId, int activityId) {
+        List<MemberView> members = sharing.members(userId, activityId); // also checks the student is a member
+        List<Task> activityTasks = tasks.findByActivityIdOrderByIdAsc(activityId);
 
-        Set<Integer> activitiesWithTasks = new HashSet<>();
-        planTasks.forEach(task -> activitiesWithTasks.add(task.getActivityId()));
+        int done = (int) activityTasks.stream().filter(Task::isDone).count();
+        int unassigned = (int) activityTasks.stream().filter(task -> task.getAssigneeId() == null).count();
+        int percent = activityTasks.isEmpty() ? 0 : Math.round(100f * done / activityTasks.size());
 
-        int activitiesDone = (int) planActivities.stream().filter(Activity::isDone).count();
-        int tasksDone = (int) planTasks.stream().filter(Task::isDone).count();
-        int steps = planTasks.size();
-        int stepsDone = tasksDone;
-        for (Activity activity : planActivities) {
-            if (!activitiesWithTasks.contains(activity.getId())) {
-                steps++;
-                if (activity.isDone()) {
-                    stepsDone++;
-                }
-            }
-        }
-        int percent = steps == 0 ? 0 : Math.round(100f * stepsDone / steps);
-
-        List<PlanMember> memberships = members.findByPlanIdOrderByIdAsc(planId);
-        List<MemberProgress> perMember = memberships.stream().map(membership -> {
-            int memberId = membership.getUserId();
-            String name = users.findById(memberId).map(User::getName).orElse("");
-            int memberTasks = (int) planTasks.stream()
-                .filter(task -> task.isDone() && Integer.valueOf(memberId).equals(task.getDoneBy())).count();
-            int memberActivities = (int) planActivities.stream()
-                .filter(activity -> activity.isDone() && Integer.valueOf(memberId).equals(activity.getDoneBy())).count();
-            return new MemberProgress(memberId, name, memberTasks, memberActivities);
+        List<MemberProgress> perMember = members.stream().map(member -> {
+            List<Task> theirs = activityTasks.stream()
+                .filter(task -> Integer.valueOf(member.userId()).equals(task.getAssigneeId())).toList();
+            return new MemberProgress(member.userId(), member.name(), theirs.size(),
+                (int) theirs.stream().filter(Task::isDone).count());
         }).toList();
 
-        return new PlanProgress(planActivities.size(), activitiesDone, planTasks.size(), tasksDone, percent, perMember);
+        return new ActivityProgress(activityTasks.size(), done, unassigned, percent, perMember);
     }
 
 }

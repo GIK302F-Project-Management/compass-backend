@@ -9,7 +9,7 @@ import com.compass.backend.model.User;
 import com.compass.backend.model.UserRepository;
 
 /**
- * Business rules for accounts: registration and credential checking.
+ * Business rules for accounts: registration, credential checking and the profile.
  * The controller only translates HTTP to and from these calls.
  */
 @Service
@@ -77,6 +77,19 @@ public class UserService {
      */
     public User findById(int id) {
         return users.findById(id).orElseThrow(UserNotFoundException::new);
+    }
+
+    /**
+     * @brief This method changes the name shown on the student's profile and to the members of their shared activities.
+     * @param id user id.
+     * @param name the new name (already trimmed and validated).
+     * @return the updated user.
+     * @throws UserNotFoundException when the account no longer exists.
+     */
+    public User rename(int id, String name) {
+        User user = findById(id);
+        user.setName(name);
+        return users.save(user);
     }
 
 }

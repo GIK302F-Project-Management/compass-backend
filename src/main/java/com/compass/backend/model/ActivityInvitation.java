@@ -11,19 +11,20 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 /**
- * An invitation link to a plan. Whoever has the token and is logged in can join, until the
- * invitation expires or the owner revokes it. The token is long and random, so it cannot be guessed.
+ * A link that lets other students join an activity. It works for several students until it expires
+ * or the owner revokes it. Only a random token goes in the link, never the activity id.
  */
 @Entity
-@Table(name = "plan_invitations", indexes = @Index(name = "idx_plan_invitations_plan_id", columnList = "plan_id"))
-public class PlanInvitation {
+@Table(name = "activity_invitations",
+    indexes = @Index(name = "idx_activity_invitations_activity_id", columnList = "activity_id"))
+public class ActivityInvitation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    @Column(name = "plan_id", nullable = false, updatable = false)
-    private int planId;
+    @Column(name = "activity_id", nullable = false, updatable = false)
+    private int activityId;
 
     @Column(nullable = false, unique = true, updatable = false)
     private String token;
@@ -40,12 +41,12 @@ public class PlanInvitation {
     @Column(name = "revoked_at")
     private Instant revokedAt;
 
-    protected PlanInvitation() {
+    protected ActivityInvitation() {
         // required by JPA
     }
 
-    public PlanInvitation(int planId, String token, int createdBy, Instant expiresAt) {
-        this.planId = planId;
+    public ActivityInvitation(int activityId, String token, int createdBy, Instant expiresAt) {
+        this.activityId = activityId;
         this.token = token;
         this.createdBy = createdBy;
         this.expiresAt = expiresAt;
@@ -64,8 +65,8 @@ public class PlanInvitation {
         return id;
     }
 
-    public int getPlanId() {
-        return planId;
+    public int getActivityId() {
+        return activityId;
     }
 
     public String getToken() {

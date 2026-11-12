@@ -12,23 +12,25 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 /**
- * Something to do for a subject, with a due date (an assignment, an exam to prepare...). It belongs
- * to a plan, so every member of the plan sees it. The service always checks that the student is a
- * member of the activity's plan before reading or changing it.
+ * Something to do for a subject, with a due date (an assignment, an exam to prepare...): one sheet of the
+ * student's atlas. The student who created it is the owner; other students can join it through an
+ * invitation (see ActivityMember) and then it is in each member's atlas, with one shared list of tasks.
+ * The services always check that the student is a member before reading or changing it.
  */
 @Entity
-@Table(name = "activities", indexes = @Index(name = "idx_activities_plan_id", columnList = "plan_id"))
+@Table(name = "study_activities", indexes = @Index(name = "idx_study_activities_owner_id", columnList = "owner_id"))
 public class Activity {
 
     public static final int MAX_TITLE_LENGTH = 200;
     public static final int MAX_SUBJECT_LENGTH = 100;
+    public static final int MAX_MEMBERS = 50;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    @Column(name = "plan_id", nullable = false, updatable = false)
-    private int planId;
+    @Column(name = "owner_id", nullable = false, updatable = false)
+    private int ownerId;
 
     @Column(nullable = false, length = MAX_TITLE_LENGTH)
     private String title;
@@ -42,7 +44,7 @@ public class Activity {
     @Column(nullable = false)
     private boolean done;
 
-    /** The member who completed it (null while it is open); the plan's progress credits them. */
+    /** The member who completed it (null while it is open). */
     @Column(name = "done_by")
     private Integer doneBy;
 
@@ -56,12 +58,13 @@ public class Activity {
         // required by JPA
     }
 
-    public Activity(int planId, String title, String subject, LocalDate dueDate, int createdBy) {
-        this.planId = planId;
+    /** A new activity, owned by the student who creates it. */
+    public Activity(int ownerId, String title, String subject, LocalDate dueDate) {
+        this.ownerId = ownerId;
         this.title = title;
         this.subject = subject;
         this.dueDate = dueDate;
-        this.createdBy = createdBy;
+        this.createdBy = ownerId;
     }
 
     /** Marks it done by the given member, or reopens it (done = false forgets who completed it). */
@@ -74,8 +77,8 @@ public class Activity {
         return id;
     }
 
-    public int getPlanId() {
-        return planId;
+    public int getOwnerId() {
+        return ownerId;
     }
 
     public String getTitle() {

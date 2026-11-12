@@ -48,6 +48,7 @@ invalid token gets `401`.
 | `POST /user/register` | `{"name", "email", "password"}`       | `202` with a fixed message, whether or not the email was already taken    |
 | `POST /user/login`    | `{"email", "password"}`               | `200` with `{"token", "expiresAt", "user"}`                               |
 | `GET /user/me`        | none                                  | `200` with the logged-in user (use it to check a stored token still works) |
+| `PUT /user/me`        | `{"name"}`                            | `200` with the user and their new name (the profile). The email cannot be changed; an empty or too long name gets `400` |
 
 Send the token on every other request: `Authorization: Bearer <token>`.
 
@@ -72,51 +73,56 @@ the description is optional (at most 1000 characters). Invalid fields get `400` 
 
 Another student's goal and a goal that does not exist both answer `404`, so goal ids cannot be used to see what other students wrote.
 
-### Collaborative learning (shared plans)
+### Activities and collaborative learning (shared activities)
 
-Activities and tasks live in a **plan**. A plan has an owner and members; every member can add, edit, complete and delete
-its activities and tasks, and everyone sees the changes the next time they load the plan. A student who has no plan gets a
-personal one called "My plan" the first time they call `GET /plans`.
+Every student has **one atlas**: the activities they created and the ones other students shared with them. An activity has an
+owner and members. The members share **one list of tasks**, and each task has an **assignee**, the member whose study route it
+goes into. A task starts assigned to whoever adds it; any member can hand it to another member or leave it unassigned.
 
-A student only sees the plans they are a member of. Anything in a plan they are not in (the plan, its activities, its tasks,
-its progress) answers `404`, as if it did not exist. Owner-only actions answer `403` to the other members.
+Every member can edit and complete the activity and its tasks; only the owner deletes it, invites others and removes members
+(the others get `403`). A student only sees the activities they are a member of: anything else answers `404`, as if it did not
+exist.
 
-| Request                                   | Body / who               | Answer                                                                                          |
-| ----------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
-| `GET /plans`                              |                          | `200` with `[{"id", "name", "role", "memberCount", "createdAt"}]`; `role` is `OWNER` or `MEMBER` |
-| `POST /plans`                             | `{"name"}`               | `201` with the plan, owned by the student                                                       |
-| `GET /plans/{id}`                         | members                  | `200` with the plan and `members: [{"userId", "name", "owner", "you", "joinedAt"}]`             |
-| `PUT /plans/{id}`                         | `{"name"}`, owner        | `200` with the renamed plan                                                                     |
-| `DELETE /plans/{id}`                      | owner                    | `204`; removes the members, invitations, activities and tasks                                   |
-| `DELETE /plans/{id}/members/{userId}`     | self, or the owner       | `204`; use your own id to leave. The owner cannot leave (`409`); members cannot remove others (`403`) |
-| `GET /plans/{id}/progress`                | members                  | `200` with the overall progress (below)                                                         |
-| `POST /plans/{id}/invitations`            | owner                    | `201` with `{"id", "token", "createdAt", "expiresAt"}`; the link works for 7 days               |
-| `GET /plans/{id}/invitations`             | owner                    | `200` with the invitations that still work                                                      |
-| `DELETE /plans/{id}/invitations/{invId}`  | owner                    | `204`; the link stops working                                                                   |
-| `GET /invitations/{token}`                | any logged-in student    | `200` with `{"planName", "ownerName", "memberCount", "alreadyMember"}`, without joining         |
-| `POST /invitations/{token}/accept`        | any logged-in student    | `200` with the plan. Accepting twice is fine; a full plan (50 members) answers `409`            |
-| `GET /plans/{id}/activities`              | members                  | `200` with the activities, oldest first                                                         |
-| `POST /plans/{id}/activities`             | `{"title", "subject", "dueDate"}` | `201` with the activity                                                                |
-| `GET /activities/{id}`                    | members                  | `200` with the activity                                                                         |
-| `PUT /activities/{id}`                    | `{"title", "subject", "dueDate"}` | `200` with the updated activity                                                        |
-| `PUT /activities/{id}/done`               | `{"done": true}`         | `200`. Completing an activity completes its open tasks; reopening it leaves the tasks alone     |
-| `DELETE /activities/{id}`                 | members                  | `204`; removes its tasks                                                                        |
-| `GET /plans/{id}/tasks`                   | members                  | `200` with every task of the plan (one request instead of one per activity)                     |
-| `GET /activities/{id}/tasks`              | members                  | `200` with the activity's tasks, oldest first                                                   |
-| `POST /activities/{id}/tasks`             | `{"title", "details"?, "dueDate"?, "estimatedMinutes"?}` | `201` with the task. Adding a task reopens a completed activity     |
-| `PATCH /tasks/{id}`                       | any of `title`, `details`, `dueDate`, `estimatedMinutes`, `done` | `200` with the task                                                     |
-| `DELETE /tasks/{id}`                      | members                  | `204`                                                                                           |
+| Request                                       | Body / who               | Answer                                                                                          |
+| --------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| `GET /activities`                             |                          | `200` with the student's atlas, oldest first (below)                                            |
+| `POST /activities`                            | `{"title", "subject", "dueDate"}` | `201` with the activity, owned by the student                                          |
+| `GET /activities/{id}`                        | members                  | `200` with the activity                                                                         |
+| `PUT /activities/{id}`                        | `{"title", "subject", "dueDate"}`, members | `200` with the updated activity                                               |
+| `PUT /activities/{id}/done`                   | `{"done": true}`, members | `200`. Completing an activity completes its open tasks; reopening it leaves the tasks alone    |
+| `DELETE /activities/{id}`                     | owner                    | `204`; removes it for every member, with its tasks and invitations                              |
+| `GET /activities/{id}/members`                | members                  | `200` with `[{"userId", "name", "owner", "you", "joinedAt"}]`, the owner first                  |
+| `DELETE /activities/{id}/members/{userId}`    | self, or the owner       | `204`; use your own id to leave. Their tasks stay, unassigned. The owner cannot leave (`409`)   |
+| `POST /activities/{id}/invitations`           | owner                    | `201` with `{"id", "token", "createdAt", "expiresAt"}`; the link works for 7 days               |
+| `GET /activities/{id}/invitations`            | owner                    | `200` with the invitations that still work                                                      |
+| `DELETE /activities/{id}/invitations/{invId}` | owner                    | `204`; the link stops working                                                                   |
+| `GET /invitations/{token}`                    | any logged-in student    | `200` with `{"activityTitle", "subject", "dueDate", "ownerName", "memberCount", "alreadyMember"}`, without joining |
+| `POST /invitations/{token}/accept`            | any logged-in student    | `200` with the activity, now in the student's atlas. Accepting twice is fine; 50 members is the limit (`409`) |
+| `GET /activities/{id}/progress`               | members                  | `200` with the progress (below)                                                                 |
+| `GET /tasks`                                  |                          | `200` with every task of every activity in the atlas, whoever it is assigned to (the route planner keeps the student's own) |
+| `GET /activities/{id}/tasks`                  | members                  | `200` with the activity's tasks, oldest first                                                   |
+| `POST /activities/{id}/tasks`                 | `{"title", "details"?, "dueDate"?, "estimatedMinutes"?}` | `201` with the task, assigned to the student. Adding a task reopens a completed activity |
+| `PATCH /tasks/{id}`                           | any of `title`, `details`, `dueDate`, `estimatedMinutes`, `assigneeId`, `done` | `200` with the task                                       |
+| `DELETE /tasks/{id}`                          | members                  | `204`                                                                                           |
 
+- **An activity** is `{"id", "ownerId", "role", "memberCount", "title", "subject", "dueDate", "done", "doneBy", "createdAt"}`.
+  `role` is `OWNER` or `MEMBER`; a `memberCount` above 1 means it is shared.
+- **A task** is `{"id", "activityId", "title", "details", "dueDate", "estimatedMinutes", "assigneeId", "done", "doneBy", "createdAt"}`.
+  The names of `assigneeId` and `doneBy` come from the members list.
 - **Invitations.** The owner creates a link and shares it however they like (the web page builds `/join/<token>`). Whoever
   opens it while logged in can see what it is for and accept it. The token is 256 random bits; an unknown, expired or revoked
   token always answers `404`, so the three cases cannot be told apart. The owner can revoke a link at any time.
 - **Editing together.** `PATCH /tasks/{id}` only changes the fields in the body, so two members editing different fields of the
-  same task do not overwrite each other. `null` clears `dueDate` or `estimatedMinutes`. Invalid or unknown fields answer `400`
-  with `{"errors": {"title": "..."}}`. The first member to complete a task is credited with it, and reopening it clears the credit.
-- **Progress.** `GET /plans/{id}/progress` answers
-  `{"activitiesTotal", "activitiesDone", "tasksTotal", "tasksDone", "percent", "members": [{"userId", "name", "tasksDone", "activitiesDone"}]}`.
-  `percent` counts every task, plus every activity that has no tasks, as one step each. It is computed on every request.
+  same task do not overwrite each other. `null` clears `dueDate`, `estimatedMinutes` or `assigneeId`; an assignee who is not a
+  member answers `400`. Invalid or unknown fields answer `400` with `{"errors": {"title": "..."}}`. The first member to complete
+  a task is credited with it, and reopening it clears the credit.
+- **Progress.** `GET /activities/{id}/progress` answers
+  `{"tasksTotal", "tasksDone", "tasksUnassigned", "percent", "members": [{"userId", "name", "tasksAssigned", "tasksDone"}]}`,
+  computed on every request.
 - Members are shown to each other by name only, never by email.
+- **Older databases.** Activities used to live in shared plans. The first time the app starts on such a database it moves them:
+  each activity is owned by its plan's owner, with the plan's members as members, and each task is assigned to whoever created
+  it. The old plan tables (and their invitation links) are then dropped.
 
 ### Study plans
 
@@ -187,12 +193,12 @@ appears when you expect the model to be used. To get another plan, run the scrip
 
 ```
 src/main/java/com/compass/backend/
-├── config/       # Security (JWT, CORS) and token setup
+├── config/       # Security (JWT, CORS), token setup and the one-time move out of the old shared plans
 ├── controller/   # HTTP endpoints and the error handlers that turn exceptions into responses
 ├── dto/          # Request and response shapes
-├── exception/    # Business errors (invalid credentials, plan not found, not the owner...)
+├── exception/    # Business errors (invalid credentials, activity not found, not the owner...)
 ├── model/        # JPA entities and repositories
-├── service/      # Business logic: users, tokens, goals, shared plans, activities, tasks, progress, study-plan generators
+├── service/      # Business logic: users, tokens, goals, activities and sharing, tasks, progress, study-plan generators
 └── validation/   # Custom validation rules
 src/test/java/    # Controller tests (MockMvc) and service tests
 scripts/          # study-plan.ps1, the terminal client for study plans

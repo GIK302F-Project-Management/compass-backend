@@ -9,7 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * Body of POST /plans/{id}/activities and PUT /activities/{id}. The rules mirror
+ * Body of POST /activities and PUT /activities/{id}. The rules mirror
  * validateNewActivity() in the frontend, so the backend never trusts the browser alone.
  */
 public record ActivityRequest(

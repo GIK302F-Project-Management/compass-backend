@@ -1,7 +1,7 @@
 package com.compass.backend.exception;
 
 /**
- * Thrown when an activity does not exist or belongs to a plan the student is not a member of.
+ * Thrown when an activity does not exist or the student is not one of its members. Both cases look the same on purpose..
  */
 public class ActivityNotFoundException extends RuntimeException {
 

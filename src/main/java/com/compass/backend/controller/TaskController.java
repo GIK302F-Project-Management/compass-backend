@@ -23,7 +23,7 @@ import com.compass.backend.service.TaskService;
 import jakarta.validation.Valid;
 
 /**
- * The tasks of an activity. Any member of the activity's plan can list, add, change, complete and
+ * The tasks of an activity. Any member of the activity can list, add, change, assign, complete and
  * delete them; a student who is not a member gets 404.
  */
 @RestController
@@ -45,16 +45,17 @@ public class TaskController {
     }
 
     /**
-     * @brief This method lists every task of a plan, so a page can load them with one request.
+     * @brief This method lists every task of every activity in the student's atlas, so a page (the route planner)
+     *        can load them with one request. Each task says who it is assigned to.
      * @return the tasks, oldest first.
      */
-    @GetMapping("/plans/{planId}/tasks")
-    public List<TaskResponse> listByPlan(@AuthenticationPrincipal Jwt jwt, @PathVariable int planId) {
-        return taskService.listByPlan(userId(jwt), planId).stream().map(TaskResponse::from).toList();
+    @GetMapping("/tasks")
+    public List<TaskResponse> listForMember(@AuthenticationPrincipal Jwt jwt) {
+        return taskService.listForMember(userId(jwt)).stream().map(TaskResponse::from).toList();
     }
 
     /**
-     * @brief This method adds a task to an activity.
+     * @brief This method adds a task to an activity, assigned to the student who adds it.
      * @param request JSON with title (required), details, dueDate and estimatedMinutes (all optional).
      * @return 201 with the created task.
      */
@@ -67,8 +68,9 @@ public class TaskController {
     }
 
     /**
-     * @brief This method changes some fields of a task (title, details, dueDate, estimatedMinutes, done).
-     *        Fields that are not in the body stay as they are; null clears dueDate or estimatedMinutes.
+     * @brief This method changes some fields of a task (title, details, dueDate, estimatedMinutes, assigneeId,
+     *        done). Fields that are not in the body stay as they are; null clears dueDate, estimatedMinutes or
+     *        assigneeId. The assignee must be a member of the activity.
      * @param body JSON object with the fields to change.
      * @return the updated task, 400 for an invalid field, or 404.
      */

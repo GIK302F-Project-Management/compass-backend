@@ -7,23 +7,23 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
-/**
- * A student who can see and change a plan. The owner is a member too, so "is this student in the
- * plan?" is always one lookup. The database refuses a second row for the same student and plan.
- */
+/** A student who can see and work on an activity. The owner is a member too, from the moment they create it. */
 @Entity
-@Table(name = "plan_members", uniqueConstraints = @UniqueConstraint(columnNames = { "plan_id", "user_id" }))
-public class PlanMember {
+@Table(name = "activity_members",
+    uniqueConstraints = @UniqueConstraint(columnNames = { "activity_id", "user_id" }),
+    indexes = @Index(name = "idx_activity_members_user_id", columnList = "user_id"))
+public class ActivityMember {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    @Column(name = "plan_id", nullable = false, updatable = false)
-    private int planId;
+    @Column(name = "activity_id", nullable = false, updatable = false)
+    private int activityId;
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private int userId;
@@ -31,12 +31,12 @@ public class PlanMember {
     @Column(name = "joined_at", nullable = false, updatable = false)
     private Instant joinedAt = Instant.now();
 
-    protected PlanMember() {
+    protected ActivityMember() {
         // required by JPA
     }
 
-    public PlanMember(int planId, int userId) {
-        this.planId = planId;
+    public ActivityMember(int activityId, int userId) {
+        this.activityId = activityId;
         this.userId = userId;
     }
 
@@ -44,8 +44,8 @@ public class PlanMember {
         return id;
     }
 
-    public int getPlanId() {
-        return planId;
+    public int getActivityId() {
+        return activityId;
     }
 
     public int getUserId() {

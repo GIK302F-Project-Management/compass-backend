@@ -8,9 +8,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.compass.backend.dto.PlanResponse;
-import com.compass.backend.service.PlanService;
-import com.compass.backend.service.PlanService.InvitationPreview;
+import com.compass.backend.dto.ActivityResponse;
+import com.compass.backend.service.SharingService;
+import com.compass.backend.service.SharingService.InvitationPreview;
 
 /**
  * What a student does with an invitation link: see what it is for, then accept it. The student has
@@ -20,31 +20,32 @@ import com.compass.backend.service.PlanService.InvitationPreview;
 @RequestMapping("/invitations")
 public class InvitationController {
 
-    private final PlanService planService;
+    private final SharingService sharingService;
 
-    public InvitationController(PlanService planService) {
-        this.planService = planService;
+    public InvitationController(SharingService sharingService) {
+        this.sharingService = sharingService;
     }
 
     /**
-     * @brief This method shows the plan an invitation is for, without joining it.
+     * @brief This method shows the activity an invitation is for, without joining it.
      * @param token the token from the link.
-     * @return the plan name, its owner, the member count and whether the student is already in it.
+     * @return the activity title, subject and due date, its owner, the member count and whether the student
+     *         is already in it.
      */
     @GetMapping("/{token}")
     public InvitationPreview preview(@AuthenticationPrincipal Jwt jwt, @PathVariable String token) {
-        return planService.preview(userId(jwt), token);
+        return sharingService.preview(userId(jwt), token);
     }
 
     /**
-     * @brief This method joins the plan. Accepting twice is fine.
+     * @brief This method joins the activity, so it shows up in the student's atlas. Accepting twice is fine.
      * @param token the token from the link.
-     * @return the plan; 409 when it is full.
+     * @return the activity; 409 when it is full.
      */
     @PostMapping("/{token}/accept")
-    public PlanResponse accept(@AuthenticationPrincipal Jwt jwt, @PathVariable String token) {
+    public ActivityResponse accept(@AuthenticationPrincipal Jwt jwt, @PathVariable String token) {
         int userId = userId(jwt);
-        return PlanResponse.from(planService.accept(userId, token), userId);
+        return ActivityResponse.from(sharingService.accept(userId, token), userId);
     }
 
     private static int userId(Jwt jwt) {
