@@ -16,7 +16,8 @@ import com.compass.backend.model.Task;
  */
 public final class TaskChanges {
 
-    private static final Set<String> FIELDS = Set.of("title", "details", "dueDate", "estimatedMinutes", "done");
+    private static final Set<String> FIELDS =
+        Set.of("title", "details", "dueDate", "estimatedMinutes", "assigneeId", "done");
 
     private final Map<String, Object> values = new LinkedHashMap<>();
 
@@ -98,6 +99,15 @@ public final class TaskChanges {
                 }
                 yield number.intValue();
             }
+            case "assigneeId" -> {
+                if (value == null) {
+                    yield null; // nobody does it for now
+                }
+                if (!(value instanceof Number number) || number.doubleValue() != Math.rint(number.doubleValue())) {
+                    throw new IllegalArgumentException("The assignee must be a member's id, or null.");
+                }
+                yield number.intValue();
+            }
             default -> {
                 if (!(value instanceof Boolean done)) {
                     throw new IllegalArgumentException("Done must be true or false.");
@@ -114,6 +124,11 @@ public final class TaskChanges {
         return text.trim();
     }
 
+    /** The new assignee when the body changes it to a student (not when it clears it), else null. */
+    Integer newAssignee() {
+        return (Integer) values.get("assigneeId");
+    }
+
     /** Applies the changes to a task; {@code userId} is credited when the task gets completed. */
     void applyTo(Task task, int userId) {
         values.forEach((field, value) -> {
@@ -122,6 +137,7 @@ public final class TaskChanges {
                 case "details" -> task.setDetails((String) value);
                 case "dueDate" -> task.setDueDate((LocalDate) value);
                 case "estimatedMinutes" -> task.setEstimatedMinutes((Integer) value);
+                case "assigneeId" -> task.setAssigneeId((Integer) value);
                 default -> {
                     boolean done = (Boolean) value;
                     // Completing a task that is already done keeps the first member's credit.

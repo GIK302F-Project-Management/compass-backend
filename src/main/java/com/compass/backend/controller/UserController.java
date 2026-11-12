@@ -6,12 +6,14 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.compass.backend.dto.LoginRequest;
 import com.compass.backend.dto.LoginResponse;
+import com.compass.backend.dto.ProfileRequest;
 import com.compass.backend.dto.RegisterRequest;
 import com.compass.backend.dto.RegisterResponse;
 import com.compass.backend.dto.UserResponse;
@@ -70,6 +72,16 @@ public class UserController {
     @GetMapping("/me")
     public UserResponse me(@AuthenticationPrincipal Jwt jwt) {
         return UserResponse.from(userService.findById(Integer.parseInt(jwt.getSubject())));
+    }
+
+    /**
+     * @brief This method changes the profile of the logged-in user (their name; the email is how they log in).
+     * @param request JSON with name (required, at most 100 characters).
+     * @return the updated user. Invalid fields get 400 with {"errors": {"name": "..."}}.
+     */
+    @PutMapping(value = "/me", consumes = "application/json")
+    public UserResponse updateMe(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ProfileRequest request) {
+        return UserResponse.from(userService.rename(Integer.parseInt(jwt.getSubject()), request.name()));
     }
 
 }

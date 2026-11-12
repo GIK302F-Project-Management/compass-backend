@@ -12,13 +12,13 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 /**
- * One step of an activity. Its plan is the activity's plan (planId is kept here too, so a plan's
- * tasks come from one query and the progress needs no join).
+ * One step of an activity. Every member of the activity sees it; the assignee is the member who will do
+ * it, so it goes into their study route (null while nobody took it).
  */
 @Entity
-@Table(name = "tasks", indexes = {
-    @Index(name = "idx_tasks_activity_id", columnList = "activity_id"),
-    @Index(name = "idx_tasks_plan_id", columnList = "plan_id")
+@Table(name = "activity_tasks", indexes = {
+    @Index(name = "idx_activity_tasks_activity_id", columnList = "activity_id"),
+    @Index(name = "idx_activity_tasks_assignee_id", columnList = "assignee_id")
 })
 public class Task {
 
@@ -33,9 +33,6 @@ public class Task {
     @Column(name = "activity_id", nullable = false, updatable = false)
     private int activityId;
 
-    @Column(name = "plan_id", nullable = false, updatable = false)
-    private int planId;
-
     @Column(nullable = false, length = MAX_TITLE_LENGTH)
     private String title;
 
@@ -49,6 +46,10 @@ public class Task {
     /** Null when nobody estimated how long it takes. */
     @Column(name = "estimated_minutes")
     private Integer estimatedMinutes;
+
+    /** The member who will do it; null while nobody took it. */
+    @Column(name = "assignee_id")
+    private Integer assigneeId;
 
     @Column(nullable = false)
     private boolean done;
@@ -67,15 +68,16 @@ public class Task {
         // required by JPA
     }
 
-    public Task(int activityId, int planId, String title, String details, LocalDate dueDate,
-            Integer estimatedMinutes, int createdBy) {
+    /** A new task, assigned to the student who creates it. */
+    public Task(int activityId, String title, String details, LocalDate dueDate, Integer estimatedMinutes,
+            int createdBy) {
         this.activityId = activityId;
-        this.planId = planId;
         this.title = title;
         this.details = details;
         this.dueDate = dueDate;
         this.estimatedMinutes = estimatedMinutes;
         this.createdBy = createdBy;
+        this.assigneeId = createdBy;
     }
 
     /** Marks it done by the given member, or reopens it (done = false forgets who completed it). */
@@ -90,10 +92,6 @@ public class Task {
 
     public int getActivityId() {
         return activityId;
-    }
-
-    public int getPlanId() {
-        return planId;
     }
 
     public String getTitle() {
@@ -126,6 +124,14 @@ public class Task {
 
     public void setEstimatedMinutes(Integer estimatedMinutes) {
         this.estimatedMinutes = estimatedMinutes;
+    }
+
+    public Integer getAssigneeId() {
+        return assigneeId;
+    }
+
+    public void setAssigneeId(Integer assigneeId) {
+        this.assigneeId = assigneeId;
     }
 
     public boolean isDone() {

@@ -13,20 +13,19 @@ import com.compass.backend.exception.ActivityNotFoundException;
 import com.compass.backend.exception.InvalidTaskChangesException;
 import com.compass.backend.exception.InvitationNotFoundException;
 import com.compass.backend.exception.MemberNotFoundException;
-import com.compass.backend.exception.NotPlanOwnerException;
+import com.compass.backend.exception.NotActivityOwnerException;
 import com.compass.backend.exception.OwnerCannotLeaveException;
-import com.compass.backend.exception.PlanFullException;
-import com.compass.backend.exception.PlanNotFoundException;
+import com.compass.backend.exception.ActivityFullException;
 import com.compass.backend.exception.TaskNotFoundException;
 import com.compass.backend.exception.UserNotFoundException;
 
 /**
- * Maps failures on the plan, invitation, activity and task endpoints to HTTP responses. Invalid fields
+ * Maps failures on the activity, sharing, invitation and task endpoints to HTTP responses. Invalid fields
  * use the same JSON body as registration, {"errors": {"title": "..."}}, so the web page can show each
  * message next to its field. Limited to these controllers so the other endpoints keep their own format.
  */
 @RestControllerAdvice(assignableTypes = {
-    PlanController.class, InvitationController.class, ActivityController.class, TaskController.class
+    InvitationController.class, ActivityController.class, TaskController.class
 })
 public class CollaborationExceptionHandler {
 
@@ -45,7 +44,7 @@ public class CollaborationExceptionHandler {
 
     /** The thing does not exist or is not the student's: the same 404 for both. */
     @ExceptionHandler({
-        PlanNotFoundException.class, ActivityNotFoundException.class, TaskNotFoundException.class,
+        ActivityNotFoundException.class, TaskNotFoundException.class,
         InvitationNotFoundException.class, MemberNotFoundException.class
     })
     public ResponseEntity<String> handleNotFound(RuntimeException ex) {
@@ -53,12 +52,12 @@ public class CollaborationExceptionHandler {
     }
 
     /** A member who is not the owner tried an owner-only action. */
-    @ExceptionHandler(NotPlanOwnerException.class)
-    public ResponseEntity<String> handleNotOwner(NotPlanOwnerException ex) {
+    @ExceptionHandler(NotActivityOwnerException.class)
+    public ResponseEntity<String> handleNotOwner(NotActivityOwnerException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
     }
 
-    @ExceptionHandler({ PlanFullException.class, OwnerCannotLeaveException.class })
+    @ExceptionHandler({ ActivityFullException.class, OwnerCannotLeaveException.class })
     public ResponseEntity<String> handleConflict(RuntimeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
     }

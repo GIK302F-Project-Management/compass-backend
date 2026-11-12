@@ -1,7 +1,7 @@
 package com.compass.backend.exception;
 
 /**
- * Thrown when a task does not exist or belongs to a plan the student is not a member of.
+ * Thrown when a task does not exist or belongs to an activity the student is not a member of.
  */
 public class TaskNotFoundException extends RuntimeException {
 
